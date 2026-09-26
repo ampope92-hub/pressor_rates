@@ -12,8 +12,7 @@ DIR/feed.txt holds the messages in the order the engine filed them, one per line
 
 A page is `PAGE <n> <next>` followed by n message lines; <next> is a token or END. `BUSY <ms>`
 means nothing was served: the same request is answered once <ms> milliseconds have passed since
-the BUSY. A connection is closed after its twentieth answer and after 30 seconds without a
-request. Anything else gets `ERR <reason>`.
+the BUSY. A connection is closed after its twentieth answer. Anything else gets `ERR <reason>`.
 """
 import argparse
 import os
@@ -26,7 +25,6 @@ import threading
 import time
 
 PER_CONNECTION = 20
-IDLE_S = 30
 
 
 class Engine:
@@ -99,7 +97,6 @@ class Handler(socketserver.StreamRequestHandler):
             eng.conns = getattr(eng, "conns", 0) + 1
             cid = eng.conns
         eng.log(f"c{cid} OPEN")
-        self.connection.settimeout(IDLE_S)
         self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         answers = 0
         try:

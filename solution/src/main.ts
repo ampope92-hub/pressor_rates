@@ -190,13 +190,15 @@ async function main() {
     changes.get(p.order)!.push({ t: e.t, ch: e.ch, p: p.on ? { ...p } : null });
   }
 
-  const report: Record<string, { delivered_mcg: number; over_s: number; under_s: number; peak: number }> = {};
+  // Rows are written out as text from the exact integers, keyed by the order id as a JSON string:
+  // no figure passes through a float and no id passes through an object property.
+  const rows: string[] = [];
   for (const [oid, o] of [...orders.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const ch = changes.get(oid) || [];
     const wds = o.versions.map((v) => dosingWeight(o.stay, v.signed));
     const bounds = [...new Set([...ch.map((c) => c.t), ...o.versions.map((v) => v.signed)])].sort((a, b) => a - b);
     const state = new Map<string, Program>();
-    let total = 0n, over = 0, under = 0;
+    let total = 0n, over = 0n, under = 0n;
     let peakN = -1n, peakD = 1n;
     let ci = 0;
     for (let k = 0; k + 1 < bounds.length; k++) {
@@ -215,18 +217,14 @@ async function main() {
       const v = o.versions[vi];
       // dose = s / den in the order's unit
       const den = o.unit === "mcg/kg/min" ? 60n * wds[vi] : 600n;
-      if (1000n * s > v.max * den) over += b - a;
-      if (1000n * s < v.min * den) under += b - a;
+      if (1000n * s > v.max * den) over += BigInt(b - a);
+      if (1000n * s < v.min * den) under += BigInt(b - a);
       if (peakN < 0n || s * peakD > peakN * den) { peakN = s; peakD = den; }
     }
-    report[oid] = {
-      delivered_mcg: Number(total / 36000n),
-      over_s: over,
-      under_s: under,
-      peak: peakN < 0n ? 0 : Number((1000n * peakN) / peakD),
-    };
+    const peak = peakN < 0n ? 0n : (1000n * peakN) / peakD;
+    rows.push(`${JSON.stringify(oid)}:{"delivered_mcg":${total / 36000n},"over_s":${over},"under_s":${under},"peak":${peak}}`);
   }
-  process.stdout.write(JSON.stringify({ orders: report }) + "\n");
+  process.stdout.write(`{"orders":{${rows.join(",")}}}\n`);
 }
 
 main().catch((e) => { process.stderr.write(String(e && e.stack || e) + "\n"); process.exit(1); });

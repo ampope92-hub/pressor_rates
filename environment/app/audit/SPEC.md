@@ -22,7 +22,7 @@ the page size is the deployment's own setting.
 The engine is shared with the rest of the hospital and sheds load. Instead of a page it can answer
 `BUSY <ms>`: nothing was served, and the same request is answered once `ms` milliseconds have
 passed; asked sooner, it answers `BUSY` again with the time left. It closes a connection after
-that connection's twentieth answer (a `BUSY` is an answer) and after 30 seconds with no request.
+that connection's twentieth answer (a `BUSY` is an answer).
 A token stays good on a new connection. A malformed request or an unknown token gets `ERR` and a
 reason.
 
@@ -31,7 +31,8 @@ reason.
 Pages hold the messages in the order the engine filed them. Chart and pharmacy messages are filed
 as they are sent; the pump server forwards telemetry every few minutes, so pump lines are filed
 after their own time and the feed as a whole is not in time order. Fields are separated by `|`
-and no field contains one. Times are the hospital's wall clock as `YYYYMMDDHHMMSS`, to the second.
+and no field contains one. Stay, weight, order and channel ids are letters and digits only.
+Times are the hospital's wall clock as `YYYYMMDDHHMMSS`, to the second.
 
     W|<filed>|<stay>|<obs>|<taken>|<kind>|<kg>|<status>
     O|<signed>|<stay>|<order>|<version>|<drug>|<unit>|<min>|<max>
