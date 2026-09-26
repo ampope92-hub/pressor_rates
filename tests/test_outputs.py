@@ -1,7 +1,8 @@
 """Grades the audit reports. test.sh compiled the agent's TypeScript and ran it against the week
 the agent's engine served, a held-back week and a small week reached by host name, capturing
 stdout under /opt/run. Nothing here recomputes a report: every figure is compared with the report
-solution/generate_feed.py wrote for that week in advance."""
+the Python rule book solution/generate_feed.py wrote for that week in advance, which the first
+check holds equal to the report the separately written TypeScript reference printed for it."""
 import json
 import os
 
@@ -38,6 +39,16 @@ def is_int(v):
     return isinstance(v, int) and not isinstance(v, bool)
 
 
+def test_two_references_agree():
+    """Every week's expected report comes from two independent implementations of SPEC.md: the
+    Python rule book (golden/) and the compiled TypeScript reference run against the engine
+    (golden_ref/). They must be identical before anything is graded against them."""
+    for name in SETS:
+        a = json.loads(read_text(os.path.join(TRUTH, "golden", name + ".json")))
+        b = json.loads(read_text(os.path.join(TRUTH, "golden_ref", name + ".json")))
+        assert a == b, f"the two references disagree on the {name} week"
+
+
 def test_build_succeeded():
     """The collected sources compiled with the grader's tsconfig into dist/main.js."""
     assert read_text(os.path.join(RUN, "build_check.txt")).strip() == "ok", "src did not compile to dist/main.js"
@@ -47,6 +58,8 @@ def test_build_succeeded():
 def test_one_member_per_order(name):
     """Each run printed one JSON line with a member for every order in its week and no other."""
     got, want = report(name), golden(name)
+    if name == "hidden":
+        assert any(all(r[f] == 0 for f in FIELDS) for r in want.values()), "the held-back week keeps an order that never ran"
     assert set(got) == set(want), f"missing {sorted(set(want) - set(got))}, extra {sorted(set(got) - set(want))}"
     for oid, row in got.items():
         assert isinstance(row, dict) and set(row) == set(FIELDS), f"{oid}: members {sorted(row)}"

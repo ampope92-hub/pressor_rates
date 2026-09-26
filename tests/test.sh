@@ -77,7 +77,6 @@ install -d -o runner -g runner -m 755 /app/audit
 cp -a /opt/src_pristine/src /app/audit/src
 find /app/audit/src -type l -delete 2>/dev/null || true
 find /app/audit/src ! -type d ! -name '*.ts' -delete 2>/dev/null || true
-find /app/audit/src -name '*.d.ts' -delete 2>/dev/null || true
 install -m 444 -o root -g root /opt/graded_tsconfig.json /app/audit/tsconfig.json
 chown -R runner:runner /app/audit/src
 chmod 755 /app/audit
@@ -104,6 +103,9 @@ chown -R root:root /app/audit
 chmod -R go-w /app/audit
 find /app/audit/src -type f -exec chmod 600 {} + 2>/dev/null || true
 chmod -R a+rX /app/audit/dist 2>/dev/null || true
+# The compiler and the type declarations were for the build only. The tool runs with no package
+# on the box within its reach: node's own modules are all it can load.
+chmod 700 /usr/local/lib/node_modules
 
 ENGINE_PID=""
 start_engine() {   # $1 set, $2 host, $3 port, $4 page, $5 busy list, $6 busy ms

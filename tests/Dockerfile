@@ -49,6 +49,7 @@ RUN mkdir -p /app/audit/src && chown -R runner:runner /app && chmod 1755 /app
 # The weeks, their reports and the engine. Root only, never in a container the agent reaches.
 COPY data /opt/truth
 COPY golden /opt/truth/golden
+COPY golden_ref /opt/truth/golden_ref
 COPY engine /opt/engine
 COPY graded_tsconfig.json /opt/graded_tsconfig.json
 RUN chmod 700 /opt/truth /opt/engine && chmod 644 /opt/graded_tsconfig.json

@@ -175,6 +175,8 @@ async function main() {
   for (const e of pump) {
     let p = live.get(e.ch);
     if (e.ev === "START") {
+      // a new program on a channel ends what that channel was pushing for its order
+      if (p) changes.get(p.order)!.push({ t: e.t, ch: e.ch, p: null });
       p = { order: e.a[0], unit: e.a[1], dm: dec(e.a[2], 3), wd: e.a[3] === "-" ? 0n : dec(e.a[3], 1), c: BigInt(e.a[4]), on: true };
       live.set(e.ch, p);
     } else if (!p) continue;
@@ -206,6 +208,7 @@ async function main() {
       if (state.size === 0) continue;
       let s = 0n;                                   // rate10 x conc, summed; mcg/min = s / 600
       for (const p of state.values()) s += rate10(p) * p.c;
+      if (s === 0n) continue;                       // every rate rounds to zero: nothing is pushing
       total += s * BigInt(b - a);
       let vi = 0;
       for (let j = 0; j < o.versions.length; j++) if (o.versions[j].signed <= a) vi = j;

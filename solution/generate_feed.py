@@ -166,6 +166,9 @@ def audit(lines, flags=frozenset()):
     for t, _, ch, ev, a in sorted(pump, key=key):
         st = chan.get(ch)
         if ev == "START":
+            if st is not None:
+                # a new program on a channel ends whatever that channel was pushing for its order
+                changes[st["order"]].append((t, ch, None))
             wd = dec(a[3], 1) if a[3] != "-" else None
             st = {"order": a[0], "unit": a[1], "dm": dec(a[2], 3), "wd": wd, "c": int(a[4]), "on": True}
             st["rate_wd"], st["rate_c"] = wd, st["c"]
@@ -244,7 +247,10 @@ def audit(lines, flags=frozenset()):
                     state[ch] = p
                 ci += 1
             vi = max((i for i, v in enumerate(vers) if v[0] <= a), default=None)
-            if not state:
+            # a program whose rate comes out at zero pushes nothing, so it is not running
+            Wd0 = weight_value(weights[dobs[vi]], flags) if vi is not None else 0
+            pushing = {ch: p for ch, p in state.items() if flow(p, Wd0) > 0}
+            if not pushing:
                 if "under_when_idle" in flags and vi is not None and (o["dc"] is None or a < o["dc"]):
                     under += b - a
                 continue
@@ -258,19 +264,19 @@ def audit(lines, flags=frozenset()):
                 Wd = weight_value(weights[dobs[vi]], flags, at=a)
             else:
                 Wd = weight_value(weights[dobs[vi]], flags)
-            flows = {ch: flow(p, Wd) for ch, p in state.items()}
+            flows = {ch: flow(p, Wd) for ch, p in pushing.items()}
             delivered_here = sum(flows.values()) * (b - a) / 60
             if "delivered_floor_per_interval" in flags:
                 delivered += int(delivered_here)
             else:
                 delivered += delivered_here
             if "channels_not_summed" in flags:
-                newest = max(state, key=lambda ch: (started[ch], ch))
+                newest = max(pushing, key=lambda ch: (started[ch], ch))
                 mcg_min = flows[newest]
             else:
                 mcg_min = sum(flows.values())
             if "pump_dose_as_dose" in flags:
-                dose = Fraction(sum(p["dm"] for p in state.values()), 1000)
+                dose = Fraction(sum(p["dm"] for p in pushing.values()), 1000)
             elif o["unit"] == "mcg/kg/min":
                 dose = mcg_min * 10 / Wd
             else:
@@ -354,7 +360,7 @@ CONFIGS = {
                "late_p": 0.5, "corr_p": 0.55, "dry_p": 0.35, "overlap_p": 0.6, "alarm_rate": 0.1,
                "mismatch_p": 0.3, "rekey_p": 0.4, "bag_ml": 500, "second_p": 0.55, "double_corr_p": 0.35, "shuffle_p": 0.6,
                "conc_pick": 1, "drugs": ["norepinephrine", "epinephrine", "phenylephrine", "dopamine"],
-               "hours": (6, 80), "early_p": 0.45},
+               "hours": (6, 80), "early_p": 0.45, "never_ran": True},
     # a small week reached by host name
     "edge": {"start": "20260316000000", "stays": 3, "mattress": (5.0, 9.0), "gain": (0.5, 1.5),
              "late_p": 0.6, "corr_p": 0.8, "dry_p": 0.6, "overlap_p": 0.7, "alarm_rate": 0.15,
@@ -698,6 +704,20 @@ def generate(cfg, seed):
         sid = f"S{rng.randint(10, 99)}{i:02d}"
         ls, _ = gen_stay(rng, cfg, sid, t0, pumps_used)
         all_lines.extend(ls)
+    if cfg.get("never_ran"):
+        # an order signed and then discontinued before any pump was started for it, drawn from
+        # its own generator so the rest of the week is unchanged
+        r2 = random.Random(seed * 7 + 3)
+        firsts = sorted(x for x in all_lines if x[2].startswith("O|") and x[2].split("|")[4] == "1")
+        f = firsts[r2.randrange(len(firsts))][2].split("|")
+        stay, signed = f[2], unstamp(f[1]) + r2.randint(2 * 3600, 6 * 3600)
+        filed = {x[0] for x in all_lines if x[2].startswith("W|") and x[2].split("|")[2] == stay}
+        while signed in filed:
+            signed += 1
+        oid = f"RX{stay[1:]}9"
+        all_lines.append((signed, 1, f"O|{stamp(signed)}|{stay}|{oid}|1|norepinephrine|mcg/kg/min|0.02|0.3"))
+        dc = signed + r2.randint(15 * 60, 50 * 60)
+        all_lines.append((dc, 1, f"D|{stamp(dc)}|{oid}"))
     all_lines.sort(key=lambda x: (x[0], x[1]))
     return [x[2] for x in all_lines]
 
