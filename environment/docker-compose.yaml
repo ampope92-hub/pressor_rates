@@ -1,0 +1,30 @@
+services:
+  # The audit tool's container. The harness supplies its build and keepalive; this file only
+  # says where the engine is.
+  main:
+    environment:
+      ENGINE_HOST: "127.0.0.1"
+      ENGINE_PORT: "7710"
+
+  # The interface engine. Every service shares one network namespace, so the tool reaches it on
+  # the loopback address. It is its own image because the week's messages live only there.
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.engine
+    restart: unless-stopped
+    command:
+      - "python3"
+      - "/srv/engine/engine.py"
+      - "--data"
+      - "/srv/engine/data"
+      - "--host"
+      - "127.0.0.1"
+      - "--port"
+      - "7710"
+      - "--page"
+      - "40"
+      - "--busy"
+      - "1,23"
+      - "--busy-ms"
+      - "250"

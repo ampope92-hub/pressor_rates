@@ -1,77 +1,36 @@
-# TB3.0 task manifest.
-#
-# Every field below is required unless marked optional. The four prose fields
-# (difficulty/solution/verification/relevant_experience) are what a reviewer reads
-# first — write them last, once the task actually works, and write them honestly.
+name = "pressor-rates"
 
-name = "REPLACE-task-slug"
-
-# Paths the SEPARATE verifier reads out of the agent's final container. Declare the
-# whole project directory when the verifier needs to rebuild or re-run the agent's
-# own sources, not just inspect an output file.
-artifacts = ["/app/"]
+# The one path the separate verifier collects from the agent's final container. Top level on
+# purpose: Harbor drops an artifacts list placed under [verifier].
+artifacts = ["/app/audit/src/"]
 
 [metadata]
-author_name = "REPLACE"
-author_email = "REPLACE"
-
-# category must be one of: Science, Software, ML, Operations, Security, Hardware, Media
-# subcategory is an open list — see the taxonomy for the conventional values.
-category = "REPLACE"
-subcategory = "REPLACE"
-tags = ["REPLACE", "3-to-6", "descriptive", "keywords"]
-languages = ["REPLACE"]
-
-# One of: base, core, advanced, frontier — set from measured pass rates, not by feel.
-difficulty = "REPLACE"
-expert_time_estimate_hours = 0  # REPLACE with a real best-case estimate for a domain expert
-
-difficulty_explanation = """\
-REPLACE. What specifically defeats a strong agent here? Name the concrete traps and \
-why partial progress still fails. A reviewer who does not know your domain should \
-finish this paragraph understanding the shape of the difficulty.\
-"""
-
-solution_explanation = """\
-REPLACE. The reference approach at a level someone could follow without reading \
-solve.sh — what has to be discovered, in what order, and what the key insight is.\
-"""
-
-verification_explanation = """\
-REPLACE. What the verifier grades, how it grades it, and why passing it is only \
-possible by actually doing the work. Call out each independent axis of failure.\
-"""
-
-# NOTE: this one is a claim about you, not about the task. Rewrite it to match your
-# actual background before submitting; generic statements fail review.
-relevant_experience = """\
-REPLACE. The professional experience that qualifies you to set the difficulty and \
-correctness bar for this task.\
-"""
-
-# Network policy is set per phase. [environment] is the baseline and MUST be
-# "public" so the image build can install dependencies — the harnesses require it.
-# [agent] and [verifier] are the author's choice: either "public" or "no-network".
-# Those two values are the only permitted ones. Set all three phases explicitly
-# rather than relying on inheritance from the baseline.
+author_name = "anonymous"
+author_email = "anonymous"
+category = "Operations"
+subcategory = "Compliance"
+tags = ["typescript", "medication-safety", "infusion-pumps", "hl7-feed", "icu-audit"]
+languages = ["typescript"]
+difficulty = "core"
+expert_time_estimate_hours = 5
+is_multi_container = true
+difficulty_explanation = "The agent writes a TypeScript tool for an ICU medication safety committee that reads a week of messages from the hospital's interface engine (charted weights, pressor order versions and smart pump programming events) and reports, per order, the micrograms the patient got, the seconds above and below the ordered range and the peak dose, exactly. The hard part is the weight a dose is per kg of, because on a real ICU the charted weight moves all stay and most of its movement is not the patient: bed scales weigh the air mattress and linen, nurses chart hours after weighing, a bed weight is later charted again with status C under the same observation, sometimes twice, the renal team charts a dry weight nobody weighed, and fluid resuscitation adds kilograms daily. Pharmacy verifies each order version against one scale weight, the one taken last among those already filed when it signed, and a correction filed afterwards changes that weight back to the moment it was taken, while a weight taken earlier but filed late does not count. Separately the pump knows none of this: it works the rate out from the weight the nurse keyed off the bed display, rounds to a tenth of a mL/h, holds the dose when the weight or the bag changes, stops on alarms, and two channels overlap at bag changes. So the drug delivered follows the pump's weight and the dose judged against the order follows pharmacy's corrected weight, and a tool that takes either weight for the other, trusts the pump's own dose display, or applies a correction from when it was filed produces a report of the right shape that agrees with the committee's signed example week and is still wrong. The rule book in solution/generate_feed.py expresses 21 such misreadings; on the shipped week each moves between 6 and 56 of 68 graded figures, on the held-back week between 5 and 72 of 96, and every one moves at least one figure on each of 8 fresh seeds of both, while the signed example week does not move under 10 of them, every weight, correction, overlap and alarm reading among them. None of the facts is hard alone; the expert's work is keeping the pump's world and the pharmacy's world apart and joining them only through the micrograms per minute."
+solution_explanation = "solve.sh copies solution/src/main.ts into /app/audit/src and builds it with the project's tsconfig. The tool opens a TCP connection with node's net module to ENGINE_HOST and ENGINE_PORT, asks FEED and follows the page tokens to END, buffering bytes into lines because pages arrive in arbitrary pieces, waiting out a BUSY before asking again, and reopening the connection and repeating the request when the engine closes it after twenty answers. Weights are kept per observation with the time first filed and the figure filed last. Each order version's dosing weight is the BED, STAND or HOIST weight of the stay with the latest taken time among those first filed at or before the signing, else the stated weight, at its final figure. Pump lines are replayed per channel in time order: START sets dose, keyed weight and concentration, DOSE, WEIGHT and BAG change one of them, ALARM and RESUME stop and restart, STOP ends; the rate is the nearest tenth of dose x weight x 60 / conc (or dose x 60 / conc) computed in integers. Between consecutive event and signing times the tool sums rate x conc over the order's live channels, adds it times the seconds to the delivered total, and compares 1000 x that sum with the in-effect version's limit times 60 x the dosing weight (or 600 for per-minute orders), all in BigInt, so every comparison and both floors are exact. On the three graded weeks and on the example week this TypeScript prints exactly what the Python rule book prints; that rule book was written before it, separately, and calibrate.py flips its readings one at a time to measure the wrong routes."
+verification_explanation = "Grading happens in its own container, which is handed nothing from the agent's box but the sources under /app/audit/src. Only TypeScript reaches the compiler: links and every non-.ts file under src are deleted, the tsconfig is the grader's own, and tsc runs as an unprivileged user through a seccomp launcher (tests/launch.c) that refuses any other exec; the output becomes root-owned. The compiled tool then runs three times, as that user through the same launcher, ten minutes each, against an engine test.sh starts from copies baked into the verifier image: the shipped week on 127.0.0.2 with another port, page size and BUSY pattern, a held-back week (another month, unit habits, bag size and concentrations, 24 orders) on 127.0.0.1, and a five-order week reached by the host name engine.icu.internal. Before anything untrusted runs, /tests, the weeks, the engine, the run directory and /logs/verifier are closed to that user and probed with a listing, root's PATH is checked for writable entries, and scratch space is swept between runs; pytest runs by absolute path with -P and every file it reads is opened with O_NOFOLLOW. Nothing is recomputed at grading time: the goldens are the reports solution/generate_feed.py wrote. The checks are that the build succeeded, that each run printed one JSON line with a member for exactly the week's orders and four whole numbers each, that every delivered_mcg, over_s, under_s and peak equals the golden exactly (12 checks, one per week and figure), and that each engine's log shows it answered BUSY and later served the last page. The reference scores 1, doing nothing scores 0, and eleven wrong variants run through this verifier all score 0: a truncated rate, corrections ignored, late-charted weights counted, the dry weight counted, one channel of an overlap, a weight re-key ignored, alarms ignored, the first version's weight kept, the weight filed last, the pump's keyed weight as the dosing weight, and the shipped week's report printed as a constant."
+relevant_experience = "I have worked on ICU medication safety audits where vasopressor titration compliance was reviewed from smart pump logs against the pharmacy record, and the recurring argument was always about the weight: the bed scale with the pressure mattress on, the admission weight the family guessed, the weight the nurse keyed into the pump that nobody updated after the chart was corrected. Reconciling a pump's dose display with the dose per kg the prescriber meant is exactly the part that takes an experienced pharmacist or informatics nurse a careful afternoon per case."
 
 [verifier]
-timeout_sec = 600
-network_mode = "no-network"
-# "separate" is required: the verifier runs in its own container built from
-# tests/Dockerfile, after the agent's container is torn down. Tests and oracle data
-# are therefore never visible to the agent.
+timeout_sec = 3600
 environment_mode = "separate"
+network_mode = "public"
 
 [agent]
-timeout_sec = 3600
-# "no-network" if the task is meant to be solved offline; "public" if it genuinely
-# needs internet access. REPLACE to match your task.
-network_mode = "no-network"
+timeout_sec = 5400
+network_mode = "public"
 
 [environment]
 network_mode = "public"
-build_timeout_sec = 600
+build_timeout_sec = 900
 cpus = 2
-memory_mb = 8192
+memory_mb = 4096
 storage_mb = 10240

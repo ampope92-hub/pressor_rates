@@ -1,4 +1,2 @@
-out/
-__pycache__/
-.git
-*.log
+**/__pycache__
+**/*.pyc

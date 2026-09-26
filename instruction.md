@@ -1,11 +1,3 @@
-The summariser in /app is wrong. It runs, but the report it writes does not match what
-downstream expects.
+The medication safety committee wants this week's pressor audit out of `/app/audit`. The tool in `/app/audit/src/main.ts` is a stub that prints an empty report. Make it read the week from the unit's interface engine, which runs on this box at `ENGINE_HOST` and `ENGINE_PORT`, and print the committee's report as one line of JSON on standard output. `/app/audit/SPEC.md` covers the engine's protocol and its load shedding, the message formats, how the pumps and the pharmacy work on this unit, and what each figure in the report means. `/app/audit/examples` has a week that was already audited, with its signed report.
 
-Rebuild /app/out/report.json for the files under /app/data. The report is a JSON object with
-a "files" array — one entry per .txt file, each with its "name" and its "words" count — ordered
-by name, plus a "total_words" holding the sum of every word counted. It is indented by two
-spaces and ends with a trailing newline.
-
-Keep it driveable the way CI drives it: the program stays at /app/src/summarize.py and is run as
-`python3 /app/src/summarize.py --data <dir> --out <file>`. CI points it at directories other
-than the one shipped here.
+It stays TypeScript on node with node's own modules and no packages. The grader keeps only the `.ts` files under `/app/audit/src`, compiles them with its own copy of `/app/audit/tsconfig.json`, and runs `node dist/main.js` from `/app/audit` three times, ten minutes each: against this week on a different address, port and page size, against a week you have not seen, and against a small week reached by host name. Every figure for every order has to match the audited report exactly, or that run fails.
