@@ -103,8 +103,8 @@ chown -R root:root /app/audit
 chmod -R go-w /app/audit
 find /app/audit/src -type f -exec chmod 600 {} + 2>/dev/null || true
 chmod -R a+rX /app/audit/dist 2>/dev/null || true
-# The compiler and the type declarations were for the build only. The tool runs with no package
-# on the box within its reach: node's own modules are all it can load.
+# The compiler and the type declarations were for the build only, so their tree is closed to the
+# build user before the tool runs.
 chmod 700 /usr/local/lib/node_modules
 
 ENGINE_PID=""

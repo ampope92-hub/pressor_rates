@@ -60,6 +60,10 @@ def test_one_member_per_order(name):
     got, want = report(name), golden(name)
     if name == "hidden":
         assert any(all(r[f] == 0 for f in FIELDS) for r in want.values()), "the held-back week keeps an order that never ran"
+        rows = [ln.split("|") for ln in read_text(os.path.join(TRUTH, "hidden", "feed.txt")).splitlines()]
+        per_kg = {r[3] for r in rows if r[0] == "O" and r[6] == "mcg/kg/min"}
+        assert any(r[0] == "P" and r[3] == "START" and r[4] in per_kg and r[5] == "mcg/min" for r in rows), \
+            "the held-back week keeps a per-minute program feeding a per-kg order"
     assert set(got) == set(want), f"missing {sorted(set(want) - set(got))}, extra {sorted(set(got) - set(want))}"
     for oid, row in got.items():
         assert isinstance(row, dict) and set(row) == set(FIELDS), f"{oid}: members {sorted(row)}"

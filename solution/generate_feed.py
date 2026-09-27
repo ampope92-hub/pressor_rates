@@ -360,7 +360,8 @@ CONFIGS = {
                "late_p": 0.5, "corr_p": 0.55, "dry_p": 0.35, "overlap_p": 0.6, "alarm_rate": 0.1,
                "mismatch_p": 0.3, "rekey_p": 0.4, "bag_ml": 500, "second_p": 0.55, "double_corr_p": 0.35, "shuffle_p": 0.6,
                "conc_pick": 1, "drugs": ["norepinephrine", "epinephrine", "phenylephrine", "dopamine"],
-               "hours": (6, 80), "early_p": 0.45, "never_ran": True},
+               "hours": (6, 80), "early_p": 0.45, "never_ran": True,
+               "per_min_on_kg": True},
     # a small week reached by host name
     "edge": {"start": "20260316000000", "stays": 3, "mattress": (5.0, 9.0), "gain": (0.5, 1.5),
              "late_p": 0.6, "corr_p": 0.8, "dry_p": 0.6, "overlap_p": 0.7, "alarm_rate": 0.15,
@@ -718,8 +719,48 @@ def generate(cfg, seed):
         all_lines.append((signed, 1, f"O|{stamp(signed)}|{stay}|{oid}|1|norepinephrine|mcg/kg/min|0.02|0.3"))
         dc = signed + r2.randint(15 * 60, 50 * 60)
         all_lines.append((dc, 1, f"D|{stamp(dc)}|{oid}"))
+    if cfg.get("per_min_on_kg"):
+        all_lines.extend(plant_per_min_on_kg(all_lines, seed))
     all_lines.sort(key=lambda x: (x[0], x[1]))
     return [x[2] for x in all_lines]
+
+
+def plant_per_min_on_kg(all_lines, seed):
+    """An epinephrine order written in mcg/kg/min that the nurse ran on a per-minute program,
+    drawn from its own generator so the rest of the week is unchanged. Re-drawn until its own
+    figures sit on no boundary (checked on the stay's weights and the new order alone)."""
+    for j in range(200):
+        r3 = random.Random(seed * 11 + 5 + 1000003 * j)
+        firsts = sorted(x for x in all_lines if x[2].startswith("O|") and x[2].split("|")[4] == "1")
+        f = firsts[r3.randrange(len(firsts))][2].split("|")
+        stay = f[2]
+        wlines = [x for x in all_lines if x[2].startswith("W|") and x[2].split("|")[2] == stay]
+        stated = next(dec(x[2].split("|")[6], 1) for x in wlines if x[2].split("|")[5] == "STATED")
+        filed = {x[0] for x in wlines}
+        signed = unstamp(f[1]) + r3.randint(3 * 3600, 8 * 3600)
+        while signed in filed:
+            signed += 1
+        oid, ch = f"RX{stay[1:]}8", f"P9{stay[1:]}A"
+        out = [(signed, 1, f"O|{stamp(signed)}|{stay}|{oid}|1|epinephrine|mcg/kg/min|0.02|0.2")]
+        t = signed + r3.randint(120, 600)
+        first = True
+        for target in (0.08, 0.15, 0.24, 0.12, 0.015):
+            dm = max(500, round(target * stated / 10 * 1000 / 500) * 500)
+            while (2 * 6 * dm) % (2 * 160) == 160:          # never half way between tenths at 16 mcg/mL
+                dm += 500
+            if first:
+                out.append((t, 2, f"P|{stamp(t)}|{ch}|START|{oid}|mcg/min|{fmt(dm, 3)}|-|16"))
+                first = False
+            else:
+                out.append((t, 2, f"P|{stamp(t)}|{ch}|DOSE|{fmt(dm, 3)}"))
+            t += r3.randint(15 * 60, 40 * 60)
+        out.append((t, 2, f"P|{stamp(t)}|{ch}|STOP"))
+        dc = t + r3.randint(60, 300)
+        out.append((dc, 1, f"D|{stamp(dc)}|{oid}"))
+        mini = [x[2] for x in sorted(wlines + out, key=lambda x: (x[0], x[1]))]
+        if degenerate(mini) is None and not boundary_ties(mini):
+            return out
+    raise RuntimeError("no clean per-minute-on-kg order")
 
 
 def build(cfg, seed):
