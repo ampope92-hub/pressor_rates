@@ -162,7 +162,7 @@ run_tool 127.0.0.1 7812 /opt/run/report_hidden.json
 stop_engine
 
 echo "=== a small week reached by host name ==="
-start_engine edge 127.0.0.4 7813 7 1,21 350 || exit 0
+start_engine edge 127.0.0.4 7813 300 1,21 350 || exit 0
 run_tool "$BY_NAME" 7813 /opt/run/report_edge.json
 stop_engine
 
